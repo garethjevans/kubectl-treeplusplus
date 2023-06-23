@@ -29,13 +29,13 @@ var (
 func treeView(out io.Writer, objs objectDirectory, obj unstructured.Unstructured) {
 	tbl := uitable.New()
 	tbl.Separator = "  "
-	tbl.AddRow("NAMESPACE", "NAME", "READY", "REASON", "AGE")
+	tbl.AddRow("NAMESPACE", "NAME", "PART-OF", "READY", "REASON", "AGE", "MESSAGE")
 	treeViewInner("", tbl, objs, obj)
 	fmt.Fprintln(color.Output, tbl)
 }
 
 func treeViewInner(prefix string, tbl *uitable.Table, objs objectDirectory, obj unstructured.Unstructured) {
-	ready, reason := extractStatus(obj)
+	ready, reason, message := extractStatus(obj)
 
 	var readyColor *color.Color
 	switch ready {
@@ -56,13 +56,16 @@ func treeViewInner(prefix string, tbl *uitable.Table, objs objectDirectory, obj 
 		age = "<unknown>"
 	}
 
-	tbl.AddRow(obj.GetNamespace(), fmt.Sprintf("%s%s/%s",
-		gray.Sprint(printPrefix(prefix)),
-		obj.GetKind(),
-		color.New(color.Bold).Sprint(obj.GetName())),
+	tbl.AddRow(obj.GetNamespace(),
+		fmt.Sprintf("%s%s/%s",
+			gray.Sprint(printPrefix(prefix)),
+			obj.GetKind(),
+			color.New(color.Bold).Sprint(obj.GetName())),
+		obj.GetLabels()["app.kubernetes.io/part-of"],
 		readyColor.Sprint(ready),
 		readyColor.Sprint(reason),
-		age)
+		age,
+		message)
 	chs := objs.ownedBy(obj.GetUID())
 	for i, child := range chs {
 		var p string

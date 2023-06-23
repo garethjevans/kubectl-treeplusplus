@@ -10,40 +10,46 @@ import (
 type ReadyStatus string // True False Unknown or ""
 type Reason string
 
-func extractStatus(obj unstructured.Unstructured) (ReadyStatus, Reason) {
+func extractStatus(obj unstructured.Unstructured) (ReadyStatus, Reason, string) {
 	jsonVal, _ := json.Marshal(obj.Object["status"])
 	klog.V(6).Infof("status for object=%s/%s: %s", obj.GetKind(), obj.GetName(), string(jsonVal))
 	statusF, ok := obj.Object["status"]
 	if !ok {
-		return "", ""
+		return "", "", ""
 	}
 	statusV, ok := statusF.(map[string]interface{})
 	if !ok {
-		return "", ""
+		return "", "", ""
 	}
 	conditionsF, ok := statusV["conditions"]
 	if !ok {
-		return "", ""
+		return "", "", ""
 	}
 	conditionsV, ok := conditionsF.([]interface{})
 	if !ok {
-		return "", ""
+		return "", "", ""
 	}
 
 	for _, cond := range conditionsV {
 		condM, ok := cond.(map[string]interface{})
 		if !ok {
-			return "", ""
+			return "", "", ""
 		}
 		condType, ok := condM["type"].(string)
 		if !ok {
-			return "", ""
+			return "", "", ""
 		}
-		if condType == "Ready" {
+		if condType == "Ready" || condType == "Succeeded" {
 			condStatus, _ := condM["status"].(string)
 			condReason, _ := condM["reason"].(string)
-			return ReadyStatus(condStatus), Reason(condReason)
+			message, _ := condM["message"].(string)
+
+			// perform a manual rewrite for tekton pods
+			if condStatus == "False" && condReason == "PodCompleted" {
+				return ReadyStatus("True"), Reason(condReason), message
+			}
+			return ReadyStatus(condStatus), Reason(condReason), message
 		}
 	}
-	return "", ""
+	return "", "", ""
 }
